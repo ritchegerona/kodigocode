@@ -23,7 +23,7 @@ bun run apps/cli/src/index.ts
 ```
 kodigocode/
 ├─ apps/          # Executables (CLI, TUI, daemon)
-├─ packages/      # Core libraries (agents, tools, models, …)
+├─ packages/      # Core libraries (tools, models, …)
 ├─ templates/    # Code templates
 ├─ docs/          # Documentation
 ├─ examples/      # Sample projects

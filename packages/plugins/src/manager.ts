@@ -4,7 +4,7 @@ import { join } from 'path';
 
 export class PluginManager {
   private plugins: KodigoPlugin[] = [];
-  private commands: Map<string, (..args: any[]) => Promise<any>> = new Map();
+  private commands: Map<string, (...args: any[]) => Promise<any>> = new Map();
 
   constructor(private readonly pluginsDir: string = join(process.cwd(), 'plugins')) {}
 

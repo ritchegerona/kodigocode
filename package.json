@@ -18,10 +18,14 @@
     "ink": "^4.0.0",
     "blessed": "^0.1.81",
     "tree-sitter-cli": "^0.21.0",
-    "ripgrep": "^13.0.0",
+
     "simple-git": "^3.21.0",
     "chokidar": "^3.6.0",
     "@iarna/toml": "^2.2.5",
-    "js-yaml": "^4.1.0"
+    "js-yaml": "^4.1.0",
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/yargs": "^17.0.0",
+    "@types/ink": "^4.0.0"
   }
 }
