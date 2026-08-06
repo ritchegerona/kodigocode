@@ -1,12 +1,11 @@
 use anyhow::Result;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
 /// Application configuration loaded from TOML.
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
-    /// Maximum number of tokens in the context window.
     #[serde(default = "default_max_context_tokens")]
     pub max_context_tokens: usize,
     #[serde(default = "default_log_level")]
@@ -20,20 +19,14 @@ fn default_log_level() -> String {
 }
 
 fn default_max_context_tokens() -> usize {
-    // Default maximum tokens for context window; can be overridden via config.
     128_000
 }
 
-
 fn default_plugins_dir() -> PathBuf {
-    // Default directory for plugins.
-
-    // Default maximum tokens for the OpenClaude context window.
-    // This can be overridden via configuration.
-
     dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from(".") )
-        .join("openclaude/plugins")
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("openclaude")
+        .join("plugins")
 }
 
 impl Default for Config {
@@ -46,16 +39,48 @@ impl Default for Config {
     }
 }
 
+/// Returns the configuration directory path (ensuring it exists).
+fn config_base_dir() -> Result<PathBuf> {
+    let base = dirs::config_dir()
+        .ok_or_else(|| anyhow::anyhow!("Cannot locate config directory"))?
+        .join("openclaude");
+    fs::create_dir_all(&base)?;
+    Ok(base)
+}
+
+/// Returns the path to `config.toml`.
+pub fn config_path() -> Result<PathBuf> {
+    Ok(config_base_dir()?.join("config.toml"))
+}
+
 /// Load configuration from `$HOME/.config/openclaude/config.toml` or use defaults.
+/// If the file nor the directory exist, they are created automatically with defaults.
 pub fn load() -> Result<Config> {
-    let mut path = dirs::config_dir().ok_or_else(|| anyhow::anyhow!("Cannot locate config dir"))?;
-    path.push("openclaude");
-    path.push("config.toml");
+    let path = config_path()?;
     if path.exists() {
         let content = fs::read_to_string(&path)?;
         let cfg: Config = toml::from_str(&content)?;
         Ok(cfg)
     } else {
-        Ok(Config::default())
+        let cfg = Config::default();
+        save(&cfg)?;
+        Ok(cfg)
     }
+}
+
+/// Write the current configuration back to disk.
+pub fn save(cfg: &Config) -> Result<()> {
+    let path = config_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let content = toml::to_string_pretty(cfg)?;
+    fs::write(&path, content)?;
+    Ok(())
+}
+
+/// Ensure the plugins directory exists, creating it if necessary.
+pub fn ensure_plugins_dir(cfg: &Config) -> Result<()> {
+    fs::create_dir_all(&cfg.plugins_dir)?;
+    Ok(())
 }
