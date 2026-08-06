@@ -1,8 +1,8 @@
-/Users/ritchegerona/Development/cloneclaudecode/target/debug/deps/utf8parse-3beae6941ebb28f5.d: /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/lib.rs /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/types.rs
+/Users/ritchegerona/Development/KodigoCode/target/debug/deps/utf8parse-3beae6941ebb28f5.d: /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/lib.rs /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/types.rs
 
-/Users/ritchegerona/Development/cloneclaudecode/target/debug/deps/libutf8parse-3beae6941ebb28f5.rlib: /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/lib.rs /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/types.rs
+/Users/ritchegerona/Development/KodigoCode/target/debug/deps/libutf8parse-3beae6941ebb28f5.rlib: /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/lib.rs /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/types.rs
 
-/Users/ritchegerona/Development/cloneclaudecode/target/debug/deps/libutf8parse-3beae6941ebb28f5.rmeta: /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/lib.rs /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/types.rs
+/Users/ritchegerona/Development/KodigoCode/target/debug/deps/libutf8parse-3beae6941ebb28f5.rmeta: /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/lib.rs /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/types.rs
 
 /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/lib.rs:
 /Users/ritchegerona/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/utf8parse-0.2.2/src/types.rs:
