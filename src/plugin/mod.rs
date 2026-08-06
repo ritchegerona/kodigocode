@@ -1,9 +1,10 @@
 use anyhow::Result;
 use libloading::{Library, Symbol};
+use serde_json::Value;
 use std::fs;
 use std::path::Path;
 
-use super::tool::Tool;
+use super::tool::{Tool, ToolDescriptor, ToolError, ToolResult};
 
 pub struct PluginTool {
     inner: Box<dyn Tool>,
@@ -29,8 +30,22 @@ impl Tool for PluginTool {
         "plugin"
     }
 
+    fn descriptor(&self) -> ToolDescriptor {
+        let mut desc = self.inner.descriptor();
+        desc.name = self.inner.name().to_string();
+        desc
+    }
+
+    fn is_mutating(&self) -> bool {
+        self.inner.is_mutating()
+    }
+
     async fn run(&self, args: &[String]) -> Result<String> {
         self.inner.run(args).await
+    }
+
+    async fn run_typed(&self, input: &Value) -> std::result::Result<ToolResult, ToolError> {
+        self.inner.run_typed(input).await
     }
 }
 

@@ -34,6 +34,9 @@ pulldown-cmark = "0.13"
 syntect = "5"
 comrak = "0.30"
 walkdir = "2"
+uuid = { version = "1", features = ["v4"] }
+chrono = "0.4"
+parking_lot = "0.12"
 
 [dev-dependencies]
 assert_cmd = "2"
