@@ -13,7 +13,7 @@ export class PluginManager {
     for (const entry of entries) {
       if (entry.isDirectory()) {
         const pluginPath = join(this.pluginsDir, entry.name);
-        const mod = await import(pluginPath + '/index.js');
+        const mod = await import(pluginPath + '/index.ts');
         const plugin: KodigoPlugin = mod.plugin || mod.default;
         if (plugin) {
           await plugin.activate(context);
