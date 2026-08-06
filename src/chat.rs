@@ -1,5 +1,6 @@
 use anyhow::Result;
 use crossterm::{
+    cursor,
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
@@ -15,6 +16,8 @@ use tokio_stream::StreamExt;
 use std::io;
 #[path = "ai/mod.rs"]
 mod ai;
+#[path = "providers.rs"]
+mod providers;
 
 const TEAL: Color = Color::from_u32(0x001a2e3b);
 const TEAL_BRIGHT: Color = Color::from_u32(0x0000bfa5);
@@ -38,7 +41,13 @@ pub struct ChatApp {
 }
 
 pub struct ChatMsg { pub role: String, pub content: String }
-pub struct ProviderEntry { pub name: String, pub models: Vec<String> }
+pub struct ProviderEntry {
+    pub name: String,
+    pub description: String,
+    pub models: Vec<String>,
+    pub api_key_env: String,
+    pub base_url: String,
+}
 
 impl ChatApp {
     pub fn new(provider: String, model: String) -> Self {
@@ -46,13 +55,16 @@ impl ChatApp {
         ta.set_placeholder_text("Ask anything...");
         ta.set_style(Style::default().bg(TEAL).fg(FG));
 
-        let providers = vec![
-            ProviderEntry { name: "openclaude".into(), models: vec!["claude-sonnet-4-20250514".into(), "claude-opus-4-20250514".into(), "claude-haiku-3-20250218".into()] },
-            ProviderEntry { name: "openai".into(),     models: vec!["gpt-4o".into(), "gpt-4-turbo".into()] },
-            ProviderEntry { name: "deepseek".into(),   models: vec!["deepseek-v3".into(), "deepseek-r1".into()] },
-            ProviderEntry { name: "vertex".into(),     models: vec!["gemini-2.5-pro".into(), "gemini-2.5-flash".into()] },
-            ProviderEntry { name: "nvidia".into(),     models: vec!["meta/llama3-70b-instruct".into(), "meta/llama3-8b-instruct".into()] },
-        ];
+        let providers: Vec<ProviderEntry> = providers::all_providers()
+            .into_iter()
+            .map(|p| ProviderEntry {
+                name: p.name,
+                description: p.description,
+                models: p.models.into_iter().map(|m| m.name).collect(),
+                api_key_env: p.api_key_env,
+                base_url: p.default_base_url,
+            })
+            .collect();
 
         Self {
             messages: vec![], input: ta, provider, model, providers,
@@ -72,7 +84,7 @@ impl ChatApp {
 pub async fn run_chat(provider: String, model: String, _registry: &crate::tool::ToolRegistry) -> Result<()> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)?;
+    execute!(stdout, EnterAlternateScreen, cursor::SetCursorStyle::BlinkingBlock)?;
     let backend = ratatui::backend::CrosstermBackend::new(stdout);
     let mut terminal = Terminal::<ratatui::backend::CrosstermBackend<io::Stdout>>::new(backend)?;
     let mut app = ChatApp::new(provider, model);
@@ -109,10 +121,19 @@ async fn run_app(
                 KeyCode::Enter => {
                     if app.palette {
                         let entries = matched_entries(app);
-                        if let Some(name) = entries.get(app.palette_idx) {
-                            if let Some(idx) = app.providers.iter().position(|p| &p.name == name) {
-                                app.select_provider(idx);
-                                app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Switched to provider: {}", name) });
+                        if let Some((name, _)) = entries.get(app.palette_idx) {
+                            if app.palette_filter.starts_with("/model") {
+                                // Select model
+                                if app.providers.iter().any(|p| p.name == app.provider && p.models.iter().any(|m| m == name)) {
+                                    app.model = name.clone();
+                                    app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Switched to model: {}", name) });
+                                }
+                            } else {
+                                // Select provider
+                                if let Some(idx) = app.providers.iter().position(|p| &p.name == name) {
+                                    app.select_provider(idx);
+                                    app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Switched to provider: {} — {}", name, app.providers[idx].description) });
+                                }
                             }
                         }
                         app.palette = false; app.palette_filter.clear(); app.palette_idx = 0;
@@ -141,14 +162,23 @@ async fn run_app(
     }
 }
 
-fn matched_entries(app: &ChatApp) -> Vec<String> {
+fn matched_entries(app: &ChatApp) -> Vec<(String, String)> {
     let filter = app.palette_filter.trim_start_matches('/').to_lowercase();
-    if filter.is_empty() {
-        app.providers.iter().map(|p| p.name.clone()).collect()
+
+    if app.palette_filter.starts_with("/model") {
+        let model_filter = app.palette_filter.strip_prefix("/model").unwrap_or("").trim().to_lowercase();
+        if let Some(entry) = app.providers.iter().find(|p| p.name == app.provider) {
+            entry.models.iter()
+                .filter(|m| model_filter.is_empty() || m.to_lowercase().contains(&model_filter))
+                .map(|m| (m.clone(), format!("Model for {}", app.provider)))
+                .collect()
+        } else {
+            vec![]
+        }
     } else {
         app.providers.iter()
-            .filter(|p| p.name.to_lowercase().contains(&filter))
-            .map(|p| p.name.clone())
+            .filter(|p| filter.is_empty() || p.name.to_lowercase().contains(&filter) || p.description.to_lowercase().contains(&filter))
+            .map(|p| (p.name.clone(), format!("{} — {}", p.name, p.description)))
             .collect()
     }
 }
@@ -158,16 +188,80 @@ async fn handle_send(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<
     if content.is_empty() { return; }
 
     app.scroll = 0;
+
+    // Handle /setup command
+    if content.starts_with("/setup") {
+        let parts: Vec<&str> = content.split_whitespace().collect();
+        if parts.len() >= 3 && parts[1] == "key" {
+            // /setup key <provider> <api_key>
+            let prov = parts[2];
+            let key = parts.get(3).unwrap_or(&"");
+            std::env::set_var(
+                providers::find_provider(prov).map(|p| p.api_key_env).unwrap_or_else(|| "API_KEY".into()),
+                key,
+            );
+            app.messages.push(ChatMsg { role: "assistant".into(), content: format!("API key set for {}", prov) });
+        } else if parts.len() >= 3 && parts[1] == "url" {
+            // /setup url <provider> <base_url>
+            let prov = parts[2];
+            let url = parts.get(3).unwrap_or(&"");
+            if let Some(idx) = app.providers.iter().position(|p| p.name == prov) {
+                app.providers[idx].base_url = url.to_string();
+                app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Base URL set for {}: {}", prov, url) });
+            } else {
+                app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Unknown provider '{}'", prov) });
+            }
+        } else {
+            app.messages.push(ChatMsg { role: "assistant".into(), content: "Usage:\n  /setup key <provider> <api_key>\n  /setup url <provider> <base_url>".into() });
+        }
+        return;
+    }
+
+    if content.starts_with('/') {
+        let parts: Vec<&str> = content.split_whitespace().collect();
+        match parts.get(0).map(|s| *s) {
+            Some("/model") => {
+                if parts.len() == 1 {
+                    if let Some(entry) = app.providers.iter().find(|p| p.name == app.provider) {
+                        app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Models for {}: {}", app.provider, entry.models.join(", ")) });
+                    }
+                } else if let Some(mdl) = parts.get(1) {
+                    if let Some(entry) = app.providers.iter().find(|p| p.name == app.provider) {
+                        if entry.models.iter().any(|m| m == mdl) {
+                            app.model = (*mdl).to_string();
+                            app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Switched to model: {}", mdl) });
+                        } else {
+                            app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Model '{}' not available for {}", mdl, app.provider) });
+                        }
+                    }
+                }
+                return;
+            }
+            _ => {}
+        }
+    }
+
     app.messages.push(ChatMsg { role: "user".into(), content: content.clone() });
 
-    let api_key = std::env::var("API_KEY")
-        .or_else(|_| std::env::var("OPENAI_API_KEY"))
-        .or_else(|_| std::env::var("CLAUDE_API_KEY")).unwrap_or_default();
+    // Get API key for current provider
+    let api_key = providers::get_api_key(&app.provider).unwrap_or_default();
 
     if api_key.is_empty() {
-        app.messages.push(ChatMsg { role: "assistant".into(), content: "No API key set (API_KEY, OPENAI_API_KEY, or CLAUDE_API_KEY)".into() });
+        let env_var = app.providers.iter()
+            .find(|p| p.name == app.provider)
+            .map(|p| p.api_key_env.clone())
+            .unwrap_or_else(|| "API_KEY".into());
+        app.messages.push(ChatMsg {
+            role: "assistant".into(),
+            content: format!("No API key set for {}. Set it with:\n  /setup key {} <your_key>\nor export {} in your shell.", app.provider, app.provider, env_var),
+        });
     } else {
-        match ai::make_provider(&app.provider, &api_key) {
+        // Get optional base_url override
+        let base_url = app.providers.iter()
+            .find(|p| p.name == app.provider)
+            .map(|p| p.base_url.as_str());
+
+        match ai::make_provider_with_url(&app.provider, &api_key, base_url) {
             Ok(provider) => {
                 let ai_msgs: Vec<ai::AiMessage> = app.messages.iter()
                     .map(|m| ai::AiMessage { role: m.role.clone(), content: m.content.clone() }).collect();
@@ -323,8 +417,9 @@ fn render_palette(f: &mut ratatui::Frame, app: &ChatApp, parent: Rect) {
     let entries = matched_entries(app);
     if entries.is_empty() { return; }
 
-    let height = (entries.len() as u16).min(10) + 2;
-    let width = 36u16;
+    let is_model_mode = app.palette_filter.starts_with("/model");
+    let height = (entries.len() as u16).min(12) + 2;
+    let width = if is_model_mode { 44u16 } else { 48u16 };
     let x = 2u16;
     let y = if parent.height > height + 3 { parent.y + 2 } else { parent.bottom().saturating_sub(height) };
 
@@ -335,12 +430,14 @@ fn render_palette(f: &mut ratatui::Frame, app: &ChatApp, parent: Rect) {
         format!(" {}", app.palette_filter),
         Style::default().fg(TEAL_BRIGHT).add_modifier(Modifier::BOLD),
     )));
-    lines.push(Line::from(Span::styled(
-        "─".repeat(width as usize - 2),
-        Style::default().fg(TEAL_DIM),
-    )));
+    if is_model_mode {
+        lines.push(Line::from(Span::styled("─".repeat(width as usize - 2), Style::default().fg(TEAL_DIM))));
+    } else {
+        lines.push(Line::from(Span::styled(" Provider │ press /model for models, type to filter", Style::default().fg(DIM))));
+        lines.push(Line::from(Span::styled("─".repeat(width as usize - 2), Style::default().fg(TEAL_DIM))));
+    }
 
-    for (i, name) in entries.iter().enumerate() {
+    for (i, (name, desc)) in entries.iter().enumerate() {
         let selected = i == app.palette_idx;
         let style = if selected {
             Style::default().fg(TEAL_BRIGHT).bg(ACCENT)
@@ -348,10 +445,11 @@ fn render_palette(f: &mut ratatui::Frame, app: &ChatApp, parent: Rect) {
             Style::default().fg(FG).bg(TEAL)
         };
         let prefix = if selected { "▸ " } else { "  " };
-        lines.push(Line::from(Span::styled(
-            format!("{}{}", prefix, name),
-            style,
-        )));
+        if is_model_mode {
+            lines.push(Line::from(Span::styled(format!("{}{}", prefix, name), style)));
+        } else {
+            lines.push(Line::from(Span::styled(format!("{}{}", prefix, desc), style)));
+        }
     }
 
     let block = Block::default()
