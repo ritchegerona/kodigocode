@@ -3,6 +3,11 @@ import { SymbolSearchTool } from '../../tools/src/symbolSearchTool';
 import { CommandRegistry } from './commandRegistry';
 import { Logger } from './logger';
 import type { PluginContext } from '../../plugins/src/types';
+import { CodingAgent } from '../../agents/src/codingAgent';
+import { TestingAgent } from '../../agents/src/testingAgent';
+import { DocAgent } from '../../agents/src/docAgent';
+import { SecurityAgent } from '../../agents/src/securityAgent';
+import { GitAgent } from '../../agents/src/gitAgent';
 
 export class MasterAgent {
   private readonly logger = new Logger('[Master]');
@@ -28,7 +33,23 @@ export class MasterAgent {
       const tool = new SymbolSearchTool();
       return tool.run([query]);
     });
-    this.logger.info('MasterAgent initialized. Commands: ' + this.registry.list().join(', '));
+      // Register agent commands
+      const coding = new CodingAgent();
+      this.registry.register('code', async () => coding.execute());
+
+      const testing = new TestingAgent();
+      this.registry.register('test', async () => testing.execute());
+
+      const doc = new DocAgent();
+      this.registry.register('doc', async () => doc.execute());
+
+      const security = new SecurityAgent();
+      this.registry.register('security', async () => security.execute());
+
+      const git = new GitAgent();
+      this.registry.register('git', async (action: string = 'status') => git.execute(action));
+
+      this.logger.info('MasterAgent initialized. Commands: ' + this.registry.list().join(', '));
   }
 
   async runCommand(name: string, ...args: any[]) {
