@@ -3,7 +3,6 @@ use clap::{Arg, Command};
 pub fn build_cli() -> Command {
     Command::new("kodigocode")
         .about("Rust‑based OpenClaude CLI")
-        .subcommand_required(true)
         .subcommand(Command::new("version").about("Print version information"))
         .subcommand(
             Command::new("run")

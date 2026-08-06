@@ -81,80 +81,14 @@ async fn run() -> Result<(), anyhow::Error> {
                 println!("No tools registered.");
             } else {
                 println!("{:<20} {:<15} {}", "NAME", "SOURCE", "DESCRIPTION");
-                println!("{}", "-".repeat(76));
                 for t in &tools {
-                    println!(
-                        "{:<20} {:<15} {}",
-                        t.name,
-                        t.source,
-                        t.description,
-                    );
+                    println!("{:<20} {:<15} {}", t.name, t.source, t.description);
                 }
             }
         }
 
         Some(("interactive", _)) => {
-            println!("Entering interactive mode. Type 'help' or '?' for available commands.");
-            println!("Type 'exit' or 'quit' to leave.\n");
-            let stdin = io::stdin();
-            loop {
-                print!(">> ");
-                io::stdout().flush()?;
-                let mut line = String::new();
-                if stdin.read_line(&mut line).is_err() {
-                    break;
-                }
-                let trimmed = line.trim();
-                if trimmed.is_empty() {
-                    continue;
-                }
-                match trimmed {
-                    "exit" | "quit" => break,
-                    "help" | "?" => {
-                        println!("Available commands:");
-                        println!("  list               List registered tools");
-                        println!("  run <tool> [args]  Execute a tool");
-                        println!("  help               Show this help");
-                        println!("  exit / quit        Leave interactive mode");
-                    }
-                    "list" => {
-                        let tools = registry.list();
-                        if tools.is_empty() {
-                            println!("No tools registered.");
-                        } else {
-                            for t in &tools {
-                                println!("  {}  —  {}", t.name, t.description);
-                            }
-                        }
-                    }
-                    cmd if cmd.starts_with("run ") => {
-                        let rest = &cmd[4..];
-                        let parts: Vec<&str> = rest.split_whitespace().collect();
-                        if parts.is_empty() {
-                            eprintln!("Usage: run <tool_name> [args...]");
-                            continue;
-                        }
-                        let tool_name = parts[0];
-                        let tool_args: Vec<String> =
-                            parts[1..].iter().map(|s| s.to_string()).collect();
-
-                        match registry.get(tool_name) {
-                            Some(t) => match t.run(&tool_args).await {
-                                Ok(output) => println!("{}", output),
-                                Err(e) => eprintln!("Error: {}", e),
-                            },
-                            None => eprintln!("Unknown tool: {}", tool_name),
-                        }
-                    }
-                    _ => {
-                        eprintln!(
-                            "Unknown command '{}'. Type 'help' for commands.",
-                            trimmed
-                        );
-                    }
-                }
-            }
-            println!("Goodbye.");
+            interactive_repl(&mut registry).await?;
         }
 
         Some(("discover-plugins", sub_m)) => {
@@ -177,8 +111,75 @@ async fn run() -> Result<(), anyhow::Error> {
             }
         }
 
-        _ => unreachable!(),
+        _ => {
+            interactive_repl(&mut registry).await?;
+        }
     }
 
+    Ok(())
+}
+
+async fn interactive_repl(registry: &mut tool::ToolRegistry) -> Result<(), anyhow::Error> {
+    println!("Entering interactive mode. Type 'help' or '?' for available commands.");
+    println!("Type 'exit' or 'quit' to leave.\n");
+    let stdin = io::stdin();
+    loop {
+        print!(">> ");
+        io::stdout().flush()?;
+        let mut line = String::new();
+        if stdin.read_line(&mut line).is_err() {
+            break;
+        }
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        match trimmed {
+            "exit" | "quit" => break,
+            "help" | "?" => {
+                println!("Available commands:");
+                println!("  list               List registered tools");
+                println!("  run <tool> [args]  Execute a tool");
+                println!("  help               Show this help");
+                println!("  exit / quit        Leave interactive mode");
+            }
+            "list" => {
+                let tools = registry.list();
+                if tools.is_empty() {
+                    println!("No tools registered.");
+                } else {
+                    for t in &tools {
+                        println!("  {}  —  {}", t.name, t.description);
+                    }
+                }
+            }
+            cmd if cmd.starts_with("run ") => {
+                let rest = &cmd[4..];
+                let parts: Vec<&str> = rest.split_whitespace().collect();
+                if parts.is_empty() {
+                    eprintln!("Usage: run <tool_name> [args...]");
+                    continue;
+                }
+                let tool_name = parts[0];
+                let tool_args: Vec<String> =
+                    parts[1..].iter().map(|s| s.to_string()).collect();
+
+                match registry.get(tool_name) {
+                    Some(t) => match t.run(&tool_args).await {
+                        Ok(output) => println!("{}", output),
+                        Err(e) => eprintln!("Error: {}", e),
+                    },
+                    None => eprintln!("Unknown tool: {}", tool_name),
+                }
+            }
+            _ => {
+                eprintln!(
+                    "Unknown command '{}'. Type 'help' for commands.",
+                    trimmed
+                );
+            }
+        }
+    }
+    println!("Goodbye.");
     Ok(())
 }
