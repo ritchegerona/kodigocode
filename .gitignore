@@ -1,4 +1,9 @@
-# Rust build artifacts
-/target/
-# macOS metadata
+# Bun / Node
+node_modules/
+bun.lockb
+dist/
+# Build artefacts
+*.tsbuildinfo
+# OS / editor
 .DS_Store
+.env
