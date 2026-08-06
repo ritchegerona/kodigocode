@@ -4,20 +4,48 @@ A modular AI‑software‑engineering assistant built with **TypeScript** and **
 
 ## Installation
 
+### 1️⃣ Install Bun (>= 1.0.0)
 ```sh
-# 1. Install Bun (>= 1.0.0) – the runtime and package manager used by KodigoCode
 curl -fsSL https://bun.sh/install | bash
+```
 
-# 2. Verify Bun is available
-bun --version
+### 2️⃣ Verify Bun installation
+```sh
+bun --version   # should print something like 1.x.x
+```
 
-# 3. Clone the repository (if you haven't already)
+### 3️⃣ Clone the repository (or update an existing checkout)
+```sh
+# Fresh install
 git clone https://github.com/ritchegerona/kodigocode.git
 cd kodigocode
 
-# 4. Install project dependencies using Bun
+# If you already have the repo, fetch the latest changes:
+# (run inside the repo directory)
+git fetch origin && git checkout master && git pull origin master
+```
+
+### 4️⃣ (Optional) Uninstall Bun
+```sh
+# Remove Bun binaries and the ~/.bun directory
+rm -rf "$HOME/.bun"
+# Remove the PATH entry added to your shell profile (e.g., ~/.zshrc or ~/.bashrc)
+sed -i '' '/\.bun\/bin/d' ~/.zshrc   # adjust the file name for your shell
+```
+
+### 5️⃣ Install project dependencies
+```sh
+export PATH="$HOME/.bun/bin:$PATH"   # make sure Bun is on your PATH for this session
 bun install
 ```
+
+### 6️⃣ Build the workspace (compile all packages)
+```sh
+bun run build
+```
+
+After these steps you can run the CLI or TUI as described below.
+
 
 ## Quick Start
 
