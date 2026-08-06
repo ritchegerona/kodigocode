@@ -1,0 +1,17 @@
+model:
+  provider: openai
+  model: gpt-5.5
+
+permissions:
+  filesystem: workspace
+  terminal: ask
+  network: true
+
+memory:
+  enabled: true
+
+plugins:
+  enabled: true
+
+theme:
+  name: kodigo-dark
