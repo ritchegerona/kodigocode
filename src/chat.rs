@@ -5,13 +5,18 @@ use crossterm::{
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
+use ratatui::Terminal;
+use ratatui::widgets::Clear;
+use crate::config;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, Clear, Paragraph},
-    Terminal,
+    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
+    Frame,
 };
+use pulldown_cmark::{Parser, Event as MdEvent, Tag, CodeBlockKind};
+use syntect::{parsing::SyntaxSet, highlighting::{ThemeSet, Style as SynStyle}};
 use tokio_stream::StreamExt;
 use std::io;
 #[path = "ai/mod.rs"]
@@ -19,13 +24,68 @@ mod ai;
 #[path = "providers.rs"]
 mod providers;
 
-const TEAL: Color = Color::from_u32(0x001a2e3b);
-const TEAL_BRIGHT: Color = Color::from_u32(0x0000bfa5);
-const TEAL_DIM: Color = Color::from_u32(0x00004d40);
-const BG: Color = Color::from_u32(0x00122025);
-const FG: Color = Color::from_u32(0x00e0e0e0);
-const ACCENT: Color = Color::from_u32(0x0026a69a);
-const DIM: Color = Color::from_u32(0x005a7a7a);
+use crate::palette::{BG, FG, ACCENT, DIM, PANEL, SECONDARY, HIGHLIGHT, ERROR, WARNING, SUCCESS, INFO};
+
+// Convert markdown text (including fenced code blocks) into styled lines for rendering.
+fn markdown_to_lines(content: &str) -> Vec<Line<'static>> {
+    use pulldown_cmark::{Parser, Event as MdEvent, Tag, CodeBlockKind};
+    use syntect::{parsing::SyntaxSet, highlighting::{ThemeSet}};
+    use syntect::easy::HighlightLines;
+    let mut lines = Vec::new();
+    let parser = Parser::new(content);
+    let syntax_set = SyntaxSet::load_defaults_newlines();
+    let theme_set = ThemeSet::load_defaults();
+    let theme = theme_set.themes.get("base16-ocean.dark").unwrap_or_else(|| theme_set.themes.values().next().unwrap());
+    let mut in_code = false;
+    let mut code_lang: Option<String> = None;
+    let mut highlighter: Option<HighlightLines> = None;
+    for event in parser {
+        match event {
+            MdEvent::Start(Tag::CodeBlock(kind)) => {
+                in_code = true;
+                code_lang = match kind {
+                    CodeBlockKind::Fenced(info) => Some(info.to_string()),
+                    CodeBlockKind::Indented => None,
+                };
+                let syntax = code_lang
+                    .as_ref()
+                    .and_then(|lang| syntax_set.find_syntax_by_token(lang))
+                    .unwrap_or_else(|| syntax_set.find_syntax_plain_text());
+                highlighter = Some(HighlightLines::new(syntax, theme));
+            }
+            MdEvent::End(_) => {
+                in_code = false;
+                code_lang = None;
+                highlighter = None;
+            }
+            MdEvent::Text(text) => {
+                if in_code {
+                    if let Some(ref mut hl) = highlighter {
+                        for line in text.lines() {
+                            let ranges = hl.highlight_line(line, &syntax_set).unwrap_or_default();
+                            let mut spans = Vec::new();
+                            for (style, part) in ranges {
+                                let col = Color::Rgb(style.foreground.r, style.foreground.g, style.foreground.b);
+                                spans.push(Span::styled(part.to_string(), Style::default().fg(col)));
+                            }
+                            lines.push(Line::from(spans));
+                        }
+                    }
+                } else {
+                    for line in text.lines() {
+                        lines.push(Line::from(line.to_string()));
+                    }
+                }
+            }
+            MdEvent::SoftBreak | MdEvent::HardBreak => {
+                lines.push(Line::from(String::new()));
+            }
+            _ => {}
+        }
+    }
+    lines
+}
+
 
 pub struct ChatApp {
     pub messages: Vec<ChatMsg>,
@@ -38,8 +98,11 @@ pub struct ChatApp {
     pub palette: bool,
     pub palette_filter: String,
     pub palette_idx: usize,
+    // Simple undo history: each entry is a snapshot of messages before the last user turn
+    pub history: Vec<Vec<ChatMsg>>,
 }
 
+#[derive(Clone)]
 pub struct ChatMsg { pub role: String, pub content: String }
 pub struct ProviderEntry {
     pub name: String,
@@ -53,7 +116,7 @@ impl ChatApp {
     pub fn new(provider: String, model: String) -> Self {
         let mut ta = tui_textarea::TextArea::default();
         ta.set_placeholder_text("Ask anything...");
-        ta.set_style(Style::default().bg(TEAL).fg(FG));
+        ta.set_style(Style::default().bg(PANEL).fg(FG));
 
         let providers: Vec<ProviderEntry> = providers::all_providers()
             .into_iter()
@@ -70,6 +133,7 @@ impl ChatApp {
             messages: vec![], input: ta, provider, model, providers,
             scroll: 0, streaming: false,
             palette: false, palette_filter: String::new(), palette_idx: 0,
+            history: Vec::new(),
         }
     }
 
@@ -127,12 +191,14 @@ async fn run_app(
                                 if app.providers.iter().any(|p| p.name == app.provider && p.models.iter().any(|m| m == name)) {
                                     app.model = name.clone();
                                     app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Switched to model: {}", name) });
+                                    persist_config(app);
                                 }
                             } else {
                                 // Select provider
                                 if let Some(idx) = app.providers.iter().position(|p| &p.name == name) {
                                     app.select_provider(idx);
                                     app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Switched to provider: {} — {}", name, app.providers[idx].description) });
+                                    persist_config(app);
                                 }
                             }
                         }
@@ -189,6 +255,27 @@ async fn handle_send(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<
 
     app.scroll = 0;
 
+    // Handle special slash commands (/clear, /help)
+    if content == "/clear" {
+        app.messages.clear();
+        app.messages.push(ChatMsg { role: "assistant".into(), content: "Chat cleared.".into() });
+        return;
+    }
+    if content == "/help" {
+        let help_text = "Available commands:\n  /setup key <provider> <api_key>\n  /setup url <provider> <base_url>\n  /model [model] – list or switch model\n  /clear – clear chat history\n  /help – show this help";
+        app.messages.push(ChatMsg { role: "assistant".into(), content: help_text.into() });
+        return;
+    }
+    // Handle undo command
+    if content == "/undo" {
+        if let Some(prev) = app.history.pop() {
+            app.messages = prev;
+            app.messages.push(ChatMsg { role: "assistant".into(), content: "Undid last turn.".into() });
+        } else {
+            app.messages.push(ChatMsg { role: "assistant".into(), content: "No history to undo.".into() });
+        }
+        return;
+    }
     // Handle /setup command
     if content.starts_with("/setup") {
         let parts: Vec<&str> = content.split_whitespace().collect();
@@ -230,6 +317,7 @@ async fn handle_send(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<
                         if entry.models.iter().any(|m| m == mdl) {
                             app.model = (*mdl).to_string();
                             app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Switched to model: {}", mdl) });
+                            persist_config(app);
                         } else {
                             app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Model '{}' not available for {}", mdl, app.provider) });
                         }
@@ -241,6 +329,8 @@ async fn handle_send(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<
         }
     }
 
+    // Save snapshot for undo before adding new user message
+    app.history.push(app.messages.clone());
     app.messages.push(ChatMsg { role: "user".into(), content: content.clone() });
 
     // Get API key for current provider
@@ -275,6 +365,10 @@ async fn handle_send(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<
                             let mut done = false;
                             match delta {
                                 Some(Ok(ai::StreamDelta::Text(t))) => buf.push_str(&t),
+                                Some(Ok(ai::StreamDelta::ToolUseStart { name, .. })) => {
+                                    // Insert a placeholder for a tool call
+                                    app.messages.push(ChatMsg { role: "assistant".into(), content: format!("[Tool: {} started]", name) });
+                                }
                                 Some(Ok(ai::StreamDelta::Stop)) | None => done = true,
                                 Some(Ok(_)) => {}
                                 Some(Err(e)) => { buf = format!("Stream error: {}", e); done = true; }
@@ -299,8 +393,16 @@ async fn handle_send(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<
 
     let mut ta = tui_textarea::TextArea::default();
     ta.set_placeholder_text("Ask anything...");
-    ta.set_style(Style::default().bg(TEAL).fg(FG));
+    ta.set_style(Style::default().bg(PANEL).fg(FG));
     app.input = ta;
+}
+
+fn persist_config(app: &ChatApp) {
+    if let Ok(mut cfg) = config::load() {
+        cfg.provider.provider = app.provider.clone();
+        cfg.provider.model = app.model.clone();
+        let _ = config::save(&cfg);
+    }
 }
 
 fn ui(f: &mut ratatui::Frame, app: &mut ChatApp) {
@@ -336,12 +438,12 @@ fn render_messages(f: &mut ratatui::Frame, app: &ChatApp, area: Rect) {
         lines.push(Line::from(""));
         lines.push(Line::from(vec![
             Span::styled("  /", Style::default().fg(DIM)),
-            Span::styled("provider", Style::default().fg(TEAL_BRIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled("provider", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
             Span::styled("  Switch AI provider", Style::default().fg(DIM)),
         ]));
         lines.push(Line::from(vec![
             Span::styled("  /", Style::default().fg(DIM)),
-            Span::styled("model", Style::default().fg(TEAL_BRIGHT).add_modifier(Modifier::BOLD)),
+            Span::styled("model", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
             Span::styled("     Switch model", Style::default().fg(DIM)),
         ]));
         lines.push(Line::from(""));
@@ -361,26 +463,22 @@ fn render_messages(f: &mut ratatui::Frame, app: &ChatApp, area: Rect) {
                     Span::styled("▸", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
                     Span::styled(format!(" {}", msg.content), Style::default().fg(FG)),
                 ]));
-            } else {
-                if msg.content.is_empty() || msg.content == "● ..." {
-                    lines.push(Line::from(Span::styled(
-                        "● ...",
-                        Style::default().fg(TEAL_DIM).italic(),
-                    )));
                 } else {
-                    for ln in msg.content.lines() {
-                        if ln.is_empty() {
-                            lines.push(Line::from(""));
-                        } else {
-                            lines.push(Line::from(Span::styled(
-                                ln.to_string(),
-                                Style::default().fg(FG),
-                            )));
+                    // Assistant message: render markdown with optional syntax highlighting
+                    if msg.content.is_empty() || msg.content == "● ..." {
+                        lines.push(Line::from(Span::styled(
+                            "● ...",
+                            Style::default().fg(DIM).italic(),
+                        )));
+                    } else {
+                        // Convert markdown to styled lines
+                        let md_lines = markdown_to_lines(&msg.content);
+                        for l in md_lines {
+                            lines.push(l);
                         }
                     }
+                    lines.push(Line::from(""));
                 }
-                lines.push(Line::from(""));
-            }
             first = false;
         }
     }
@@ -399,17 +497,17 @@ fn render_status(f: &mut ratatui::Frame, app: &ChatApp, area: Rect) {
         if app.streaming { "● streaming" } else { "" }
     );
     let p = Paragraph::new(Line::from(Span::styled(text, Style::default().fg(DIM))))
-        .style(Style::default().bg(TEAL));
+        .style(Style::default().bg(PANEL));
     f.render_widget(p, area);
 }
 
 fn render_input(f: &mut ratatui::Frame, app: &mut ChatApp, area: Rect) {
     let input_block = Block::default()
         .borders(Borders::TOP)
-        .border_style(Style::default().fg(TEAL_DIM));
+        .border_style(Style::default().fg(DIM));
     app.input.set_block(input_block);
-    app.input.set_style(Style::default().bg(TEAL).fg(FG));
-    app.input.set_cursor_style(Style::default().fg(TEAL_BRIGHT));
+    app.input.set_style(Style::default().bg(PANEL).fg(FG));
+    app.input.set_cursor_style(Style::default().fg(ACCENT));
     f.render_widget(&app.input, area);
 }
 
@@ -428,21 +526,21 @@ fn render_palette(f: &mut ratatui::Frame, app: &ChatApp, parent: Rect) {
     let mut lines: Vec<Line> = vec![];
     lines.push(Line::from(Span::styled(
         format!(" {}", app.palette_filter),
-        Style::default().fg(TEAL_BRIGHT).add_modifier(Modifier::BOLD),
+        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
     )));
     if is_model_mode {
-        lines.push(Line::from(Span::styled("─".repeat(width as usize - 2), Style::default().fg(TEAL_DIM))));
+        lines.push(Line::from(Span::styled("─".repeat(width as usize - 2), Style::default().fg(DIM))));
     } else {
         lines.push(Line::from(Span::styled(" Provider │ press /model for models, type to filter", Style::default().fg(DIM))));
-        lines.push(Line::from(Span::styled("─".repeat(width as usize - 2), Style::default().fg(TEAL_DIM))));
+        lines.push(Line::from(Span::styled("─".repeat(width as usize - 2), Style::default().fg(DIM))));
     }
 
     for (i, (name, desc)) in entries.iter().enumerate() {
         let selected = i == app.palette_idx;
         let style = if selected {
-            Style::default().fg(TEAL_BRIGHT).bg(ACCENT)
+            Style::default().fg(ACCENT).bg(ACCENT)
         } else {
-            Style::default().fg(FG).bg(TEAL)
+            Style::default().fg(FG).bg(PANEL)
         };
         let prefix = if selected { "▸ " } else { "  " };
         if is_model_mode {
@@ -454,8 +552,8 @@ fn render_palette(f: &mut ratatui::Frame, app: &ChatApp, parent: Rect) {
 
     let block = Block::default()
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(TEAL_BRIGHT))
-        .style(Style::default().bg(TEAL));
+        .border_style(Style::default().fg(ACCENT))
+        .style(Style::default().bg(PANEL));
 
     f.render_widget(Clear, area);
     f.render_widget(Paragraph::new(Text::from(lines)).block(block), area);
