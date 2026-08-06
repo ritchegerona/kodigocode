@@ -1,3 +1,5 @@
+pub mod ai;
+pub mod chat;
 pub mod cli;
 pub mod config;
 pub mod error;
