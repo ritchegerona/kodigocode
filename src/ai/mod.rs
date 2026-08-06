@@ -3,6 +3,8 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 use tokio_stream::Stream;
+#[path = "../providers.rs"]
+mod providers;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AiMessage {
@@ -53,34 +55,26 @@ pub trait AiProvider: Send + Sync {
 pub mod openai_compat;
 
 pub fn make_provider(provider: &str, api_key: &str) -> Result<Box<dyn AiProvider>> {
-    match provider.to_lowercase().as_str() {
-        "openclaude" | "claude" | "anthropic" => {
-            Ok(Box::new(openai_compat::CompatProvider::new(
-                "openclaude".into(),
-                api_key,
-                "https://api.anthropic.com/v1".into(),
-            )))
-        }
-        "openai" | "gpt" => Ok(Box::new(openai_compat::CompatProvider::new(
-            "openai".into(),
-            api_key,
-            "https://api.openai.com/v1".into(),
-        ))),
-        "deepseek" => Ok(Box::new(openai_compat::CompatProvider::new(
-            "deepseek".into(),
-            api_key,
-            "https://api.deepseek.com/v1".into(),
-        ))),
-"vertex" | "gemini" => Ok(Box::new(openai_compat::CompatProvider::new(
-                "vertex".into(),
-                api_key,
-                "https://generativelanguage.googleapis.com/v1beta".into(),
-            ))),
-            "nvidia" | "nim" => Ok(Box::new(openai_compat::CompatProvider::new(
-                "nvidia".into(),
-                api_key,
-                "https://integrate.api.nvidia.com/v1".into(),
-            ))),
-        _ => Err(anyhow::anyhow!("unsupported provider '{}'", provider)),
-    }
+    make_provider_with_url(provider, api_key, None)
+}
+
+pub fn make_provider_with_url(provider_name: &str, api_key: &str, base_url: Option<&str>) -> Result<Box<dyn AiProvider>> {
+    let def = providers::find_provider(provider_name)
+        .unwrap_or_else(|| {
+            // Fallback: build a generic entry for unknown providers
+            providers::ProviderDef {
+                name: provider_name.to_string(),
+                description: String::new(),
+                default_base_url: "https://api.openai.com/v1".into(),
+                api_key_env: "API_KEY".into(),
+                models: vec![],
+            }
+        });
+
+    let url = base_url.unwrap_or(&def.default_base_url);
+    Ok(Box::new(openai_compat::CompatProvider::new(
+        def.name.clone(),
+        api_key,
+        url.to_string(),
+    )))
 }
