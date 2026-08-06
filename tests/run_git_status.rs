@@ -3,10 +3,9 @@ use predicates::str::contains;
 
 #[tokio::test]
 async fn run_git_status_returns_branch() {
-    // Ensure we are in a git repository (the project itself)
-    Command::cargo_bin("openclaude")
+    Command::cargo_bin("kodigocode")
         .unwrap()
-        .args(&["run", "git", "status"])
+        .args(["run", "git", "status"])
         .assert()
         .success()
         .stdout(contains("On branch"));

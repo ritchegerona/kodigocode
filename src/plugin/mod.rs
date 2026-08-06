@@ -1,19 +1,39 @@
 use anyhow::Result;
 use libloading::{Library, Symbol};
-use std::path::Path;
 use std::fs;
+use std::path::Path;
+
 use super::tool::Tool;
 
-/// Representation of the plugin manifest (openclaude-plugin.json).
-#[derive(Debug, serde::Deserialize)]
-pub struct PluginManifest {
-    pub name: String,
-    pub version: String,
-    #[serde(default)]
-    pub description: Option<String>,
+pub struct PluginTool {
+    inner: Box<dyn Tool>,
 }
 
-/// Load all plugins from a directory, returning a vector of boxed tools.
+impl PluginTool {
+    pub fn new(tool: Box<dyn Tool>) -> Self {
+        Self { inner: tool }
+    }
+}
+
+#[async_trait::async_trait]
+impl Tool for PluginTool {
+    fn name(&self) -> &'static str {
+        self.inner.name()
+    }
+
+    fn description(&self) -> &'static str {
+        self.inner.description()
+    }
+
+    fn source(&self) -> &'static str {
+        "plugin"
+    }
+
+    async fn run(&self, args: &[String]) -> Result<String> {
+        self.inner.run(args).await
+    }
+}
+
 pub fn load_plugins(dir: &Path) -> Result<Vec<Box<dyn Tool>>> {
     let mut tools: Vec<Box<dyn Tool>> = Vec::new();
     if !dir.is_dir() {
@@ -25,15 +45,30 @@ pub fn load_plugins(dir: &Path) -> Result<Vec<Box<dyn Tool>>> {
         if path.extension().and_then(|s| s.to_str()) != Some("so") {
             continue;
         }
-        // Load the library
         unsafe {
             let lib = Library::new(&path)?;
-            // Expected symbol signature
-            let constructor: Symbol<unsafe fn() -> Box<dyn Tool>> = lib.get(b"plugin_entry")?;
-            let tool = constructor();
-            tools.push(tool);
-            // Note: lib is dropped here, which may unload symbols; in real code keep lib alive.
+            let constructor: Symbol<unsafe fn() -> Box<dyn Tool>> =
+                lib.get(b"plugin_entry")?;
+            let raw_tool = constructor();
+            let wrapped = PluginTool::new(raw_tool);
+            tools.push(Box::new(wrapped));
         }
     }
     Ok(tools)
+}
+
+pub fn discover_plugins(dir: &Path) -> Result<Vec<String>> {
+    let mut names = Vec::new();
+    if !dir.is_dir() {
+        return Ok(names);
+    }
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|s| s.to_str()) == Some("so") {
+            names.push(entry.file_name().to_string_lossy().to_string());
+        }
+    }
+    names.sort();
+    Ok(names)
 }

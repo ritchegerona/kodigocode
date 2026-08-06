@@ -18,6 +18,10 @@ impl Tool for GitTool {
         "git"
     }
 
+    fn description(&self) -> &'static str {
+        "Execute git commands and return their output"
+    }
+
     async fn run(&self, args: &[String]) -> Result<String> {
         let mut cmd = Command::new("git");
         for arg in args {
