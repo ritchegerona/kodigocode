@@ -1,5 +1,6 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -9,6 +10,14 @@ pub struct ProviderConfig {
     pub provider: String,
     #[serde(default = "default_model")]
     pub model: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+pub struct Secrets {
+    #[serde(default)]
+    pub api_keys: HashMap<String, String>,
+    #[serde(default)]
+    pub base_urls: HashMap<String, String>,
 }
 
 fn default_provider() -> String {
@@ -38,6 +47,8 @@ pub struct Config {
     pub plugins_dir: PathBuf,
     #[serde(default)]
     pub provider: ProviderConfig,
+    #[serde(default)]
+    pub base_urls: HashMap<String, String>,
 }
 
 fn default_log_level() -> String {
@@ -62,8 +73,69 @@ impl Default for Config {
             log_level: default_log_level(),
             plugins_dir: default_plugins_dir(),
             provider: ProviderConfig::default(),
+            base_urls: HashMap::new(),
         }
     }
+}
+
+/// Returns the path to `secrets.toml`.
+pub fn secrets_path() -> Result<PathBuf> {
+    Ok(config_base_dir()?.join("secrets.toml"))
+}
+
+/// Load API keys and base URLs from secrets.toml.
+pub fn load_secrets() -> Result<Secrets> {
+    let path = secrets_path()?;
+    if path.exists() {
+        let content = fs::read_to_string(&path)?;
+        let secrets: Secrets = toml::from_str(&content)?;
+        Ok(secrets)
+    } else {
+        Ok(Secrets::default())
+    }
+}
+
+/// Persist secrets to disk.
+pub fn save_secrets(secrets: &Secrets) -> Result<()> {
+    let path = secrets_path()?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let content = toml::to_string_pretty(secrets)?;
+    fs::write(&path, content)?;
+    Ok(())
+}
+
+/// Set an API key for a provider, persisting to disk.
+pub fn set_api_key(provider: &str, key: &str) -> Result<()> {
+    let mut secrets = load_secrets()?;
+    secrets.api_keys.insert(provider.to_lowercase(), key.to_string());
+    save_secrets(&secrets)?;
+    std::env::set_var(
+        format!("{}_API_KEY", provider.to_lowercase()),
+        key,
+    );
+    Ok(())
+}
+
+/// Look up a stored API key for a provider.
+pub fn get_stored_api_key(provider: &str) -> Option<String> {
+    load_secrets()
+        .ok()
+        .and_then(|s| s.api_keys.get(&provider.to_lowercase()).cloned())
+}
+
+/// Set a base URL override for a provider, persisting to config.
+pub fn set_base_url(cfg: &mut Config, provider: &str, url: &str) -> Result<()> {
+    cfg.base_urls.insert(provider.to_lowercase(), url.to_string());
+    save(cfg)
+}
+
+/// Get stored base URL for a provider.
+pub fn get_stored_base_url(provider: &str) -> Option<String> {
+    load_secrets()
+        .ok()
+        .and_then(|s| s.base_urls.get(&provider.to_lowercase()).cloned())
 }
 
 /// Returns the configuration directory path (ensuring it exists).

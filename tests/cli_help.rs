@@ -8,5 +8,5 @@ fn cli_shows_help() {
         .arg("--help")
         .assert()
         .success()
-        .stdout(contains("OpenClaude CLI"));
+        .stdout(contains("kc"));
 }

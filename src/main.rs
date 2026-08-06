@@ -41,7 +41,7 @@ async fn run() -> Result<(), anyhow::Error> {
 
     match matches.subcommand() {
         Some(("version", _)) => {
-            println!("openclaude {}", env!("CARGO_PKG_VERSION"));
+            println!("kc {}", env!("CARGO_PKG_VERSION"));
         }
 
         Some(("run", sub_m)) => {
@@ -101,7 +101,74 @@ async fn run() -> Result<(), anyhow::Error> {
             ).await?;
         }
 
-        Some(("discover-plugins", sub_m)) => {
+        Some(("version", _)) => {
+            println!("kc {}", env!("CARGO_PKG_VERSION"));
+        }
+
+        Some(("setup", sub_m)) => {
+            match sub_m.subcommand() {
+                Some(("key", args)) => {
+                    let provider = args.get_one::<String>("provider").expect("provider");
+                    let key = args.get_one::<String>("key").expect("key");
+                    match config::set_api_key(provider, key) {
+                        Ok(()) => println!("API key saved for {}", provider),
+                        Err(e) => eprintln!("Error saving API key: {}", e),
+                    }
+                }
+                Some(("url", args)) => {
+                    let provider = args.get_one::<String>("provider").expect("provider");
+                    let url = args.get_one::<String>("url").expect("url");
+                    let mut cfg = config::load()?;
+                    match config::set_base_url(&mut cfg, provider, url) {
+                        Ok(()) => println!("Base URL saved for {}: {}", provider, url),
+                        Err(e) => eprintln!("Error saving base URL: {}", e),
+                    }
+                }
+                Some(("show", args)) => {
+                    let secrets = config::load_secrets()?;
+                    let cfg = config::load()?;
+                    let filter = args
+                        .get_one::<String>("provider")
+                        .map(|s| s.to_lowercase());
+
+                    println!("Keys stored in   : {}", config::secrets_path()?.display());
+                    println!("Base URLs stored in : {}", config::config_path()?.display());
+                    println!();
+
+                    let show_keys: Vec<(&String, &String)> = if let Some(ref f) = filter {
+                        secrets
+                            .api_keys
+                            .iter()
+                            .filter(|(k, _)| k.to_lowercase() == *f)
+                            .collect()
+                    } else {
+                        secrets.api_keys.iter().collect()
+                    };
+                    let show_urls: Vec<(&String, &String)> = if let Some(ref f) = filter {
+                        cfg.base_urls
+                            .iter()
+                            .filter(|(k, _)| k.to_lowercase() == *f)
+                            .collect()
+                    } else {
+                        cfg.base_urls.iter().collect()
+                    };
+
+                    if show_keys.is_empty() && show_urls.is_empty() {
+                        println!("No stored config.");
+                    }
+                    for (prov, key) in show_keys {
+                        let redacted = if key.len() > 4 {
+                            format!("{}...{}", &key[..2], &key[key.len() - 2..])
+                        } else {
+                            "****".to_string()
+                        };
+                        println!("  {} api_key = {}", prov, redacted);
+                    }
+                    for (prov, url) in show_urls {
+                        println!("  {} base_url = {}", prov, url);
+                    }
+                }
+Some(("discover-plugins", sub_m)) => {
             let dir = sub_m
                 .get_one::<String>("dir")
                 .map(|s| s.as_str())
@@ -118,6 +185,15 @@ async fn run() -> Result<(), anyhow::Error> {
                     }
                 }
                 Err(e) => eprintln!("Failed to scan plugins: {}", e),
+            }
+        }
+
+        _ => {
+                    eprintln!("Usage: kc setup <key|url|show> ...");
+                    eprintln!("  kc setup key <provider> <key>");
+                    eprintln!("  kc setup url <provider> <url>");
+                    eprintln!("  kc setup show [provider]");
+                }
             }
         }
 
