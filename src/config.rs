@@ -3,7 +3,31 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-/// Application configuration loaded from TOML.
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct ProviderConfig {
+    #[serde(default = "default_provider")]
+    pub provider: String,
+    #[serde(default = "default_model")]
+    pub model: String,
+}
+
+fn default_provider() -> String {
+    "openclaude".to_string()
+}
+
+fn default_model() -> String {
+    "claude-sonnet-4-20250514".to_string()
+}
+
+impl Default for ProviderConfig {
+    fn default() -> Self {
+        Self {
+            provider: default_provider(),
+            model: default_model(),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Config {
     #[serde(default = "default_max_context_tokens")]
@@ -12,6 +36,8 @@ pub struct Config {
     pub log_level: String,
     #[serde(default = "default_plugins_dir")]
     pub plugins_dir: PathBuf,
+    #[serde(default)]
+    pub provider: ProviderConfig,
 }
 
 fn default_log_level() -> String {
@@ -35,6 +61,7 @@ impl Default for Config {
             max_context_tokens: default_max_context_tokens(),
             log_level: default_log_level(),
             plugins_dir: default_plugins_dir(),
+            provider: ProviderConfig::default(),
         }
     }
 }

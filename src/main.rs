@@ -1,3 +1,4 @@
+mod chat;
 mod cli;
 mod config;
 mod plugin;
@@ -32,6 +33,8 @@ async fn run() -> Result<(), anyhow::Error> {
 
     let mut registry = tool::ToolRegistry::new();
     tools::git_tool::register_git_tool(&mut registry);
+    tools::fs::register_fs_tool(&mut registry);
+    tools::exec::register_exec_tool(&mut registry);
 
     match matches.subcommand() {
         Some(("version", _)) => {
@@ -88,7 +91,11 @@ async fn run() -> Result<(), anyhow::Error> {
         }
 
         Some(("interactive", _)) => {
-            interactive_repl(&mut registry).await?;
+            chat::run_chat(
+                cfg.provider.provider.clone(),
+                cfg.provider.model.clone(),
+                &mut registry,
+            ).await?;
         }
 
         Some(("discover-plugins", sub_m)) => {
@@ -112,7 +119,11 @@ async fn run() -> Result<(), anyhow::Error> {
         }
 
         _ => {
-            interactive_repl(&mut registry).await?;
+            chat::run_chat(
+                cfg.provider.provider.clone(),
+                cfg.provider.model.clone(),
+                &mut registry,
+            ).await?;
         }
     }
 
@@ -157,7 +168,7 @@ async fn interactive_repl(registry: &mut tool::ToolRegistry) -> Result<(), anyho
                 let rest = &cmd[4..];
                 let parts: Vec<&str> = rest.split_whitespace().collect();
                 if parts.is_empty() {
-                    eprintln!("Usage: run <tool_name> [args...]");
+                    eprintln!("Usage: run <tool_name> --args...");
                     continue;
                 }
                 let tool_name = parts[0];
