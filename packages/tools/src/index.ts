@@ -4,3 +4,4 @@ export * from './shellTool';
 export * from './gitTool';
 export * from './searchTool';
 export * from './browserTool';
+export * from './symbolSearchTool';

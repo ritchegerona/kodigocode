@@ -1,4 +1,5 @@
 import { PluginManager } from '../../plugins/src/manager';
+import { SymbolSearchTool } from '../../tools/src/symbolSearchTool';
 import { CommandRegistry } from './commandRegistry';
 import { Logger } from './logger';
 import type { PluginContext } from '../../plugins/src/types';
@@ -21,6 +22,11 @@ export class MasterAgent {
     // Built‑in commands
     this.registry.register('help', async () => {
       return `Available commands: ${this.registry.list().join(', ')}`;
+    });
+    // Symbol search command for repository intelligence (Phase 2)
+    this.registry.register('symbol-search', async (query: string) => {
+      const tool = new SymbolSearchTool();
+      return tool.run([query]);
     });
     this.logger.info('MasterAgent initialized. Commands: ' + this.registry.list().join(', '));
   }
