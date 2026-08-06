@@ -115,7 +115,7 @@ impl ChatApp {
         ta.set_placeholder_text("Ask anything...");
         ta.set_style(Style::default().bg(PANEL).fg(FG));
 
-        let providers: Vec<ProviderEntry> = providers::all_providers()
+        let mut providers: Vec<ProviderEntry> = providers::all_providers()
             .into_iter()
             .map(|p| ProviderEntry {
                 name: p.name,
@@ -125,6 +125,24 @@ impl ChatApp {
                 base_url: p.default_base_url,
             })
             .collect();
+
+        // Load stored API keys from secrets into environment
+        if let Ok(secrets) = config::load_secrets() {
+            for (prov, key) in &secrets.api_keys {
+                if let Some(env_var) = find_env_var_for_provider(&providers, prov) {
+                    std::env::set_var(&env_var, key);
+                }
+            }
+        }
+
+        // Load stored base URLs from config
+        if let Ok(cfg) = config::load() {
+            for (prov, url) in &cfg.base_urls {
+                if let Some(entry) = providers.iter_mut().find(|p| p.name.to_lowercase() == *prov) {
+                    entry.base_url = url.clone();
+                }
+            }
+        }
 
         Self {
             messages: vec![], input: ta, provider, model, providers,
@@ -277,26 +295,63 @@ async fn handle_send(terminal: &mut Terminal<ratatui::backend::CrosstermBackend<
     if content.starts_with("/setup") {
         let parts: Vec<&str> = content.split_whitespace().collect();
         if parts.len() >= 3 && parts[1] == "key" {
-            // /setup key <provider> <api_key>
-            let prov = parts[2];
+            let prov = parts[2].to_lowercase();
             let key = parts.get(3).unwrap_or(&"");
-            std::env::set_var(
-                providers::find_provider(prov).map(|p| p.api_key_env).unwrap_or_else(|| "API_KEY".into()),
-                key,
-            );
-            app.messages.push(ChatMsg { role: "assistant".into(), content: format!("API key set for {}", prov) });
+
+            // Persist to secrets.toml
+            match config::set_api_key(&prov, key) {
+                Ok(()) => {
+                    // Also set env var for current session
+                    if let Some(env_var) = find_env_var_for_provider(&app.providers, &prov) {
+                        std::env::set_var(&env_var, key);
+                    }
+                    app.messages.push(ChatMsg {
+                        role: "assistant".into(),
+                        content: format!("API key saved for {}. Restart to use fully.", prov),
+                    });
+                }
+                Err(e) => {
+                    app.messages.push(ChatMsg {
+                        role: "assistant".into(),
+                        content: format!("Failed to save API key: {}", e),
+                    });
+                }
+            }
         } else if parts.len() >= 3 && parts[1] == "url" {
-            // /setup url <provider> <base_url>
-            let prov = parts[2];
+            let prov = parts[2].to_lowercase();
             let url = parts.get(3).unwrap_or(&"");
-            if let Some(idx) = app.providers.iter().position(|p| p.name == prov) {
-                app.providers[idx].base_url = url.to_string();
-                app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Base URL set for {}: {}", prov, url) });
+
+            if app.providers.iter().any(|p| p.name.to_lowercase() == prov) {
+                // Update in-memory
+                if let Some(entry) = app.providers.iter_mut().find(|p| p.name.to_lowercase() == prov) {
+                    entry.base_url = url.to_string();
+                }
+                // Persist to config.toml
+                match config::load().and_then(|mut cfg| config::set_base_url(&mut cfg, &prov, url)) {
+                    Ok(()) => {
+                        app.messages.push(ChatMsg {
+                            role: "assistant".into(),
+                            content: format!("Base URL saved for {}: {}", prov, url),
+                        });
+                    }
+                    Err(e) => {
+                        app.messages.push(ChatMsg {
+                            role: "assistant".into(),
+                            content: format!("Failed to save base URL: {}", e),
+                        });
+                    }
+                }
             } else {
-                app.messages.push(ChatMsg { role: "assistant".into(), content: format!("Unknown provider '{}'", prov) });
+                app.messages.push(ChatMsg {
+                    role: "assistant".into(),
+                    content: format!("Unknown provider: {}", prov),
+                });
             }
         } else {
-            app.messages.push(ChatMsg { role: "assistant".into(), content: "Usage:\n  /setup key <provider> <api_key>\n  /setup url <provider> <base_url>".into() });
+            app.messages.push(ChatMsg {
+                role: "assistant".into(),
+                content: "Usage:\n  /setup key <provider> <api_key>\n  /setup url <provider> <base_url>".into(),
+            });
         }
         return;
     }
@@ -400,6 +455,14 @@ fn persist_config(app: &ChatApp) {
         cfg.provider.model = app.model.clone();
         let _ = config::save(&cfg);
     }
+}
+
+fn find_env_var_for_provider(providers: &[ProviderEntry], name: &str) -> Option<String> {
+    let lower = name.to_lowercase();
+    providers
+        .iter()
+        .find(|p| p.name.to_lowercase() == lower)
+        .map(|p| p.api_key_env.clone())
 }
 
 fn ui(f: &mut ratatui::Frame, app: &mut ChatApp) {
