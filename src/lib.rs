@@ -5,5 +5,6 @@ pub mod config;
 pub mod error;
 pub mod plugin;
 pub mod providers;
+pub mod palette;
 pub mod tool;
 pub mod tools;

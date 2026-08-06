@@ -4,6 +4,7 @@ mod config;
 mod plugin;
 mod tool;
 mod tools;
+mod palette;
 
 use std::io::{self, Write};
 
