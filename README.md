@@ -79,6 +79,21 @@ For a concrete example, see the built‑in `plugins/hello` plugin.
 
 That’s it! You can now combine the CLI and TUI to iteratively develop, test, and inspect your code base.
 
+## Advanced Features (Roadmap)
+
+The following capabilities are either already available or planned for upcoming releases:
+
+- **Interactive chat** (`chat` command) – converse with the LLM directly from the CLI.
+- **Tool calling** – the LLM can request execution of built‑in tools (fs, git, search, etc.).
+- **Multi‑file editing** – agents can generate and apply changes across multiple files with a diff preview.
+- **MCP support** – Model‑Client‑Plugin protocol for external model services.
+- **Multi‑model support** – switch between OpenAI, Anthropic, Gemini, Ollama, etc.
+- **Plugin marketplace** – discover, install, enable, and manage plugins from the TUI or CLI.
+- **Multi‑agent workflows** – chain agents (e.g., `chat → code → test → git commit`).
+- **Project memory** – persistent storage of chat history, symbol indexes, and user preferences.
+- **Visual TUI dashboard** – integrated panes for file tree, editor, diff, chat, and git status.
+
+
 ## Commands
 
 The CLI exposes a set of top‑level commands managed by the **MasterAgent**:
