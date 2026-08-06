@@ -5,6 +5,8 @@ mod plugin;
 mod tool;
 mod tools;
 mod palette;
+mod model_registry;
+mod session;
 
 use std::io::{self, Write};
 

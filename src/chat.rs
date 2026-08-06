@@ -12,11 +12,8 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style, Stylize},
     text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Wrap},
-    Frame,
+    widgets::{Block, Borders, Paragraph},
 };
-use pulldown_cmark::{Parser, Event as MdEvent, Tag, CodeBlockKind};
-use syntect::{parsing::SyntaxSet, highlighting::{ThemeSet, Style as SynStyle}};
 use tokio_stream::StreamExt;
 use std::io;
 #[path = "ai/mod.rs"]
@@ -24,7 +21,7 @@ mod ai;
 #[path = "providers.rs"]
 mod providers;
 
-use crate::palette::{BG, FG, ACCENT, DIM, PANEL, SECONDARY, HIGHLIGHT, ERROR, WARNING, SUCCESS, INFO};
+use crate::palette::{BG, FG, ACCENT, DIM, PANEL};
 
 // Convert markdown text (including fenced code blocks) into styled lines for rendering.
 fn markdown_to_lines(content: &str) -> Vec<Line<'static>> {
