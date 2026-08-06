@@ -2,6 +2,23 @@
 
 A modular AI‑software‑engineering assistant built with **TypeScript** and **Bun**. It provides a lightweight CLI, an interactive TUI, and a multi‑agent architecture for coding, testing, documentation, security, and Git operations.
 
+## Installation
+
+```sh
+# 1. Install Bun (>= 1.0.0) – the runtime and package manager used by KodigoCode
+curl -fsSL https://bun.sh/install | bash
+
+# 2. Verify Bun is available
+bun --version
+
+# 3. Clone the repository (if you haven't already)
+git clone https://github.com/ritchegerona/kodigocode.git
+cd kodigocode
+
+# 4. Install project dependencies using Bun
+bun install
+```
+
 ## Quick Start
 
 ```sh
