@@ -14,7 +14,7 @@ install:
 	cargo install --path .
 
 uninstall:
-	cargo uninstall kodigocode || echo "Uninstall not supported by cargo, remove manually from ~/.cargo/bin"
+	cargo uninstall kc || echo "Uninstall not supported by cargo, remove manually from ~/.cargo/bin"
 
 test:
 	cargo test
