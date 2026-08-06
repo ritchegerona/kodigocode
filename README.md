@@ -35,6 +35,50 @@ bun run build
 bun run apps/cli/src/index.tsx --help
 ```
 
+## Usage
+
+Below is a quick walkthrough of the most common workflows.
+
+### 1️⃣ Run the CLI
+
+```sh
+# Show available commands
+bun run apps/cli/src/index.tsx --help
+
+# Get a quick status of the repository
+bun run apps/cli/src/index.tsx git status
+
+# Run the test suite
+bun run apps/cli/src/index.tsx test
+
+# Generate a short documentation excerpt
+bun run apps/cli/src/index.tsx doc
+
+# Perform a placeholder security audit
+bun run apps/cli/src/index.tsx security
+
+# Search for a symbol (e.g., a function name) across the code base
+bun run apps/cli/src/index.tsx symbol-search fetchData
+```
+
+### 2️⃣ Use the interactive TUI
+
+```sh
+bun run apps/tui/src/index.tsx
+```
+
+The TUI will render a file‑tree on the left and a Git diff view on the right. Use the arrow keys to navigate the tree; press `q` to quit.
+
+### 3️⃣ Extend functionality with plugins
+
+1. Create a new folder under `plugins/` (e.g., `plugins/myplugin`).
+2. Export a `plugin` object that implements the `KodigoPlugin` interface.
+3. The plugin will be loaded automatically on `MasterAgent` start and can register new commands via `context.registerCommand`.
+
+For a concrete example, see the built‑in `plugins/hello` plugin.
+
+That’s it! You can now combine the CLI and TUI to iteratively develop, test, and inspect your code base.
+
 ## Commands
 
 The CLI exposes a set of top‑level commands managed by the **MasterAgent**:
