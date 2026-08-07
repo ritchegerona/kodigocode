@@ -5,3 +5,5 @@ export * from './gitTool';
 export * from './searchTool';
 export * from './browserTool';
 export * from './symbolSearchTool';
+export * from './toolSchemas';
+export * from './toolRegistry';

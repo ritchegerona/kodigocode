@@ -32,4 +32,9 @@ export class PluginManager {
     if (!cmd) throw new Error(`Command ${name} not found`);
     return cmd(...args);
   }
+
+  // Return the names of all loaded plugins (used by the `plugins` CLI command)
+  listPlugins(): string[] {
+    return this.plugins.map(p => p.name);
+  }
 }

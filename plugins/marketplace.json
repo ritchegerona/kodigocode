@@ -1,0 +1,10 @@
+{
+  "plugins": [
+    {
+      "name": "hello",
+      "description": "Example hello plugin",
+      "entry": "plugins/hello/index.ts"
+    }
+    // Add more marketplace entries here
+  ]
+}
