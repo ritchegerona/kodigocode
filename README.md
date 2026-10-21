@@ -151,24 +151,31 @@ The TUI displays:
 
 ```
 kodigoCode/
-├─ apps/                # Executables (CLI, TUI, daemon)
-├─ packages/            # Core libraries (tools, models, agents, etc.)
+├─ apps/                # Executables (cli, tui, daemon)
+├─ packages/            # Core libraries
 │   ├─ core/           # Logger, config loader, command registry
-│   ├─ agents/         # Multi‑agent implementations (coding, testing, ...)
-│   ├─ tools/          # Filesystem, shell, git, search, symbol‑search tools
+│   ├─ agents/         # Multi-agent implementations (coding, testing, ...)
+│   ├─ tools/          # Filesystem, shell, git, search, symbol-search tools
 │   ├─ models/         # LLM provider abstractions
+│   ├─ planner/        # Task planning
+│   ├─ memory/         # Memory / persistence
+│   ├─ git/            # Git integration
+│   ├─ config/         # Configuration loading
+│   ├─ plugins/        # Plugin runtime
+│   ├─ telemetry/      # Telemetry
 │   ├─ terminal/       # Ink UI components (FileTree, DiffViewer, Spinner)
-│   └─ …                # Additional shared packages
-├─ templates/           # Code templates for scaffolding
-├─ docs/                # Documentation and design docs
-├─ examples/            # Sample projects demonstrating usage
-└─ tests/               # Vitest test suite
+│   └─ ui/             # Shared UI helpers
+├─ plugins/             # Bundled plugins (hello, marketplace.json)
+├─ scripts/             # Build and CLI helper scripts (build.ts, kc.ts)
+├─ src/                 # Rust component
+├─ tests/               # Vitest test suite
+└─ .github/             # CI workflows
 ```
 
 ## Development
 
 - `bun run test` – runs the Vitest suite.
-- `bun run lint` – placeholder for linting (e.g., ESLint).
+- `bun run lint` – type-checks the workspace with `tsc --noEmit`.
 - Add new packages under `packages/` and reference them via the workspace.
 - Extend the **MasterAgent** to register additional agents or plugin commands.
 
