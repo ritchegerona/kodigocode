@@ -10,8 +10,8 @@
   ],
   "scripts": {
     "build": "bun run scripts/build.ts",
-    "test": "bun run test",
-    "lint": "bun run lint"
+    "test": "vitest run",
+    "lint": "tsc --noEmit"
   },
   "devDependencies": {
     "@iarna/toml": "^2.2.5",
@@ -28,6 +28,7 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
+    "better-sqlite3": "^11.0.0",
     "ws": "^8.21.2"
   }
 }

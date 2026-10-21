@@ -32,7 +32,11 @@ export class Planner {
 
   /** Run all queued tasks in priority order */
   async runAll() {
-    for (const task of this.queue) {
+    // Snapshot and clear the queue first so `pendingCount` reflects that the
+    // tasks have been dispatched (and re-entrant adds aren't lost).
+    const tasks = this.queue;
+    this.queue = [];
+    for (const task of tasks) {
       await task.run();
     }
   }

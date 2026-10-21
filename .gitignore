@@ -7,3 +7,8 @@ dist/
 # OS / editor
 .DS_Store
 .env
+
+# SQLite runtime data
+*.sqlite
+*.sqlite-journal
+kodigo_memory.sqlite
