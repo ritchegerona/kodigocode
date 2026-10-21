@@ -20,8 +20,20 @@ export class SQLiteMemoryStore {
     stmt.run(key, JSON.stringify(value));
   }
 
+  /**
+   * No-op: SQLite persists writes immediately in `set()`.
+   * Provided so this store satisfies the same async API as the file-based
+   * MemoryStore (`load()` / `save()`).
+   */
+  async load(): Promise<void> {}
+
+  /** No-op: see `load()`. */
+  async save(): Promise<void> {}
+
   async get<T = any>(key: string): Promise<T | undefined> {
-    const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(key);
+    const row = this.db.prepare('SELECT value FROM kv WHERE key = ?').get(key) as
+      | { value: string }
+      | undefined;
     if (!row) return undefined;
     return JSON.parse(row.value) as T;
   }

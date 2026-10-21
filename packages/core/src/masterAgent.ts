@@ -11,6 +11,8 @@ import { SecurityAgent } from '../../agents/src/securityAgent';
 import { ChatAgent } from '../../agents/src/chatAgent';
 import { GitAgent } from '../../agents/src/gitAgent';
 import { WorkflowEngine, WorkflowTemplates, type WorkflowDefinition } from '../../planner/src/workflowEngine';
+import { loadConfig } from './config';
+import { createProvider } from '../../models/src/providerFactory';
 
 export class MasterAgent {
   private readonly logger = new Logger('[Master]');
@@ -24,7 +26,7 @@ export class MasterAgent {
 
   async init() {
     const ctx: PluginContext = {
-      registerCommand: (name, handler) => this.registry.register(name, handler),
+      registerCommand: (name: string, handler: (...args: any[]) => Promise<any>) => this.registry.register(name, handler),
       logger: this.logger,
     } as any;
     await this.pluginManager.loadAll(ctx);
@@ -44,10 +46,10 @@ export class MasterAgent {
     this.registry.register('test', async () => testing.execute());
 
     const doc = new DocAgent();
-    this.registry.register('doc', async () => doc.execute());
+    this.registry.register('doc', async () => doc.execute({}));
 
     const security = new SecurityAgent();
-    this.registry.register('security', async () => security.execute());
+    this.registry.register('security', async () => security.execute({}));
 
     const git = new GitAgent();
     this.registry.register('git', async (action: string = 'status') => git.execute(action));

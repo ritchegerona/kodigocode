@@ -2,7 +2,7 @@ import React from 'react';
 import { render, Text, Box } from 'ink';
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { MasterAgent } from '../../packages/core/src/masterAgent';
+import { MasterAgent } from '../../../packages/core/src/masterAgent';
 
 const argv = yargs(hideBin(process.argv))
   .command('run', 'Start the daemon')
@@ -10,7 +10,7 @@ const argv = yargs(hideBin(process.argv))
   .command('help', 'Show available commands')
   .command('symbol-search <query>', 'Search exported symbols')
   .help()
-  .argv;
+  .parseSync();
 
 const App = () => {
   const [output, setOutput] = React.useState('');
