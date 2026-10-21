@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { Logger } from '../../core/src/logger';
-import { MasterAgent } from '../../core/src/masterAgent';
+import { Logger } from '../../../packages/core/src/logger';
+import { MasterAgent } from '../../../packages/core/src/masterAgent';
 
 const logger = new Logger('[Daemon]');
 const port = process.env.KODO_DAEMON_PORT ? parseInt(process.env.KODO_DAEMON_PORT) : 8080;

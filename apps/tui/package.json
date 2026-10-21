@@ -1,0 +1,9 @@
+{
+  "name": "@kodigocode/tui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.tsx",
+  "types": "src/index.tsx",
+  "dependencies": {"@kodigocode/terminal": "*", "@kodigocode/ui": "*", "ink": "^4.0.0", "react": "^18.0.0"}
+}
